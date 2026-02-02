@@ -15,7 +15,7 @@ GID = "1649695299"
 
 # 각각 한 컬럼씩 가져오기 (B열=이름, N열=점수)
 NAMES_URL  = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=B7:B"
-SCORES_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=N7:N"
+SCORES_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=O7:O"
 
 @st.cache_data(ttl=60)  # 60초마다 새로고침(원하는 값으로 조절)
 def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
@@ -230,6 +230,7 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
 
 
 
