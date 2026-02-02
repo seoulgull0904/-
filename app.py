@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import random
 
 st.set_page_config(page_title="팀 밸런서", layout="wide")
@@ -9,24 +10,71 @@ TEAM_SIZE = 5
 # ----------------------------
 # Session state init
 # ----------------------------
-DEFAULT_PLAYERS = [
-    {"name": "대왕국", "score": 5},
-    {"name": "긴꼬리딱새", "score": 5},
-    {"name": "이라온", "score": 5},
-]
+SHEET_ID = "1raKWOAmdFv6tP51hW8JYjO6PHHvCtkKKIzFzqbppd3s"
+GID = "1649695299"
+
+# 각각 한 컬럼씩 가져오기 (B열=이름, N열=점수)
+NAMES_URL  = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=B7:B"
+SCORES_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=N7:N"
+
+@st.cache_data(ttl=60)  # 60초마다 새로고침(원하는 값으로 조절)
+def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
+    # 이름
+    df_names = pd.read_csv(NAMES_URL, header=None)
+    names = (
+        df_names.iloc[:, 0]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .tolist()
+    )
+
+    # 점수
+    df_scores = pd.read_csv(SCORES_URL, header=None)
+    scores_raw = df_scores.iloc[:, 0].tolist()
+
+    # 점수 숫자화 + 정리
+    scores = []
+    for x in scores_raw:
+        try:
+            s = int(float(x))
+        except Exception:
+            s = default_score
+        # 1~7 범위 보정
+        if s < 1: s = 1
+        if s > 7: s = 7
+        scores.append(s)
+
+    # 길이 맞추기(이름 기준)
+    if len(scores) < len(names):
+        scores += [default_score] * (len(names) - len(scores))
+    else:
+        scores = scores[:len(names)]
+
+    # (이름, 점수) 묶기 — 빈 이름 제거
+    players = []
+    for i, name in enumerate(names):
+        if name:
+            players.append({"name": name, "score": scores[i]})
+
+    return players
+
+
 
 if "players" not in st.session_state:
+    sheet_players = fetch_players_from_sheet(default_score=5)
     st.session_state.players = [
         {"id": i + 1, "name": p["name"], "score": int(p["score"])}
-        for i, p in enumerate(DEFAULT_PLAYERS)
+        for i, p in enumerate(sheet_players)
     ]
+
 
 if "next_id" not in st.session_state:
     st.session_state.next_id = len(st.session_state.players) + 1
 
 if "selected_ids" not in st.session_state:
-    # set of selected player ids
     st.session_state.selected_ids = set()
+
 if "teams_result" not in st.session_state:
     st.session_state.teams_result = None
 
@@ -111,7 +159,7 @@ with left:
         for idx, p in enumerate(st.session_state.players):
             key = f"chk_{p['id']}"
 
-            # 최초 렌더링 시에만 기본값을 세션에 넣어둠 (중요)
+            # 최초 렌더링 시에만 기본값을 세션에 넣어둠
             if key not in st.session_state:
                 st.session_state[key] = False
 
@@ -124,9 +172,9 @@ with left:
 
             with c1:
                 st.write(f"{idx + 1}. {p['name']}")
+
             with c2:
                 st.write(f"점수: **{p['score']}**")
-          
 
         st.session_state.selected_ids = selected_ids
 
@@ -178,15 +226,7 @@ else:
     cols = st.columns(min(len(teams), 4))
     for i, t in enumerate(teams):
         with cols[i % len(cols)]:
-            st.markdown(f"### 팀 {i+1}")
+            st.markdown(f"### 팀 {i + 1}")
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
-
-
-
-
-
-
-
-
