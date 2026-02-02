@@ -132,8 +132,6 @@ with left:
                         del st.session_state[key] 
                         
                     st.session_state.selected_ids.discard(p["id"]) 
-                    
-                    st.session_state.players = [x for x in
 
 
                     st.session_state.players = [x for x in st.session_state.players if x["id"] != p["id"]]
@@ -194,6 +192,7 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
 
 
 
