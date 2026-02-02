@@ -115,7 +115,7 @@ with left:
             if key not in st.session_state:
                 st.session_state[key] = False
 
-            c0, c1, c2, c3 = st.columns([1.2, 5, 2, 1])
+            c0, c1, c2 = st.columns([1.2, 6, 2])
 
             with c0:
                 checked = st.checkbox("선택", key=key, label_visibility="collapsed")
@@ -126,18 +126,7 @@ with left:
                 st.write(f"{idx + 1}. {p['name']}")
             with c2:
                 st.write(f"점수: **{p['score']}**")
-            with c3:
-                if st.button("삭제", key=f"del_{p['id']}"): 
-                    # 체크박스 키도 같이 제거 
-                    if key in st.session_state: 
-                        del st.session_state[key] 
-                        
-                    st.session_state.selected_ids.discard(p["id"]) 
-
-
-                    st.session_state.players = [x for x in st.session_state.players if x["id"] != p["id"]]
-                    st.session_state.teams_result = None
-                    st.rerun()
+          
 
         st.session_state.selected_ids = selected_ids
 
@@ -193,6 +182,7 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
 
 
 
