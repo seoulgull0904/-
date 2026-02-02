@@ -10,8 +10,9 @@ TEAM_SIZE = 5
 # Session state init
 # ----------------------------
 DEFAULT_PLAYERS = [
+    {"name": "대왕국", "score": 5},
     {"name": "긴꼬리딱새", "score": 5},
-    {"name": "아프라이나", "score": 5},
+    {"name": "이라온", "score": 5},
 ]
 
 if "players" not in st.session_state:
@@ -192,6 +193,7 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
 
 
 
