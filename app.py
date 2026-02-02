@@ -125,7 +125,11 @@ with left:
                 st.write(f"{idx + 1}. {p['name']}")
             with c2:
                 st.write(f"점수: **{p['score']}**")
-            with c3: if st.button("삭제", key=f"del_{p['id']}"): # 체크박스 키도 같이 제거 if key in st.session_state: del st.session_state[key]
+            with c3:
+                if st.button("삭제", key=f"del_{p['id']}"):
+                    # 체크박스 키도 같이 제거
+                    if key in st.session_state: 
+                        del st.session_state[key]
 
                     st.session_state.selected_ids.discard(p["id"])
 
@@ -187,5 +191,6 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
 
 
