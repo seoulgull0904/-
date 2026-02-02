@@ -41,7 +41,7 @@ def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
         except Exception:
             s = default_score
         # 1~7 범위 보정
-        if s < 1: s = 1
+        if s < 0: s = 0
         if s > 7: s = 7
         scores.append(s)
 
@@ -230,3 +230,4 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
