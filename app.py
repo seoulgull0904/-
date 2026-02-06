@@ -40,10 +40,8 @@ def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
             s = int(float(x))
         except Exception:
             s = default_score
-        # 1~7 범위 보정
-        if s < 0: s = 0
-        if s > 7: s = 7
-        scores.append(s)
+        
+        scores.append(s)  # 음수 포함 그대로
 
     # 길이 맞추기(이름 기준)
     if len(scores) < len(names):
@@ -230,6 +228,7 @@ else:
             st.write(f"합계: **{t['sum']:.2f}**")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
 
 
 
