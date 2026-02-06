@@ -8,17 +8,17 @@ st.title("팀 밸런서")
 TEAM_SIZE = 5
 
 # ----------------------------
-# Session state init
+# Google Sheets config
 # ----------------------------
 SHEET_ID = "1raKWOAmdFv6tP51hW8JYjO6PHHvCtkKKIzFzqbppd3s"
 GID = "1649695299"
 
-# 각각 한 컬럼씩 가져오기 (B열=이름, N열=점수)
 NAMES_URL  = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=B7:B"
 SCORES_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=N7:N"
 
-@st.cache_data(ttl=60)  # 60초마다 새로고침(원하는 값으로 조절)
-def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
+
+@st.cache_data(ttl=60)  # 60초마다 새로 가져오기
+def fetch_players_from_sheet(default_score: int = 0) -> list[dict]:
     # 이름
     df_names = pd.read_csv(NAMES_URL, header=None)
     names = (
@@ -29,19 +29,17 @@ def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
         .tolist()
     )
 
-    # 점수
+    # 점수(음수 포함 허용)
     df_scores = pd.read_csv(SCORES_URL, header=None)
     scores_raw = df_scores.iloc[:, 0].tolist()
 
-    # 점수 숫자화 + 정리
     scores = []
     for x in scores_raw:
         try:
             s = int(float(x))
         except Exception:
             s = default_score
-        
-        scores.append(s)  # 음수 포함 그대로
+        scores.append(s)
 
     # 길이 맞추기(이름 기준)
     if len(scores) < len(names):
@@ -58,14 +56,15 @@ def fetch_players_from_sheet(default_score: int = 5) -> list[dict]:
     return players
 
 
-
+# ----------------------------
+# Session state init
+# ----------------------------
 if "players" not in st.session_state:
-    sheet_players = fetch_players_from_sheet(default_score=5)
+    sheet_players = fetch_players_from_sheet(default_score=0)
     st.session_state.players = [
         {"id": i + 1, "name": p["name"], "score": int(p["score"])}
         for i, p in enumerate(sheet_players)
     ]
-
 
 if "next_id" not in st.session_state:
     st.session_state.next_id = len(st.session_state.players) + 1
@@ -78,22 +77,52 @@ if "teams_result" not in st.session_state:
 
 
 # ----------------------------
-# Greedy assignment
+# Team assignment (Method A: target-based)
 # ----------------------------
 def greedy_assign(players, team_count, team_size, seed=42):
+    """
+    방법 A:
+    - 목표합 target = 전체합 / 팀수
+    - 각 플레이어를 배치할 때, 그 팀에 넣었을 때 target에 가장 가까워지는 팀을 선택
+    - |score| 큰 순으로 처리(영향 큰 값 먼저 분산)
+    """
     rng = random.Random(seed)
-    ordered = sorted(players, key=lambda p: p["score"], reverse=True)
+
+    total = sum(float(p["score"]) for p in players)
+    target = total / float(team_count)
+
+    ordered = sorted(players, key=lambda p: abs(float(p["score"])), reverse=True)
 
     teams = [{"members": [], "sum": 0.0} for _ in range(team_count)]
 
     for p in ordered:
-        candidates = [i for i in range(team_count) if len(teams[i]["members"]) < team_size]
-        min_sum = min(teams[i]["sum"] for i in candidates)
-        min_teams = [i for i in candidates if teams[i]["sum"] == min_sum]
-        chosen = rng.choice(min_teams)
+        s = float(p["score"])
 
+        candidates = [i for i in range(team_count) if len(teams[i]["members"]) < team_size]
+        if not candidates:
+            break
+
+        best_idxs = []
+        best_dist = None
+
+        for i in candidates:
+            new_sum = teams[i]["sum"] + s
+            dist = abs(new_sum - target)
+
+            if best_dist is None or dist < best_dist - 1e-12:
+                best_dist = dist
+                best_idxs = [i]
+            elif abs(dist - best_dist) <= 1e-12:
+                best_idxs.append(i)
+
+        # 동률이면 인원 적은 팀 우선 -> 그래도 동률이면 랜덤
+        if len(best_idxs) > 1:
+            min_size = min(len(teams[i]["members"]) for i in best_idxs)
+            best_idxs = [i for i in best_idxs if len(teams[i]["members"]) == min_size]
+
+        chosen = rng.choice(best_idxs)
         teams[chosen]["members"].append(p)
-        teams[chosen]["sum"] += float(p["score"])
+        teams[chosen]["sum"] += s
 
     return teams
 
@@ -108,7 +137,7 @@ with left:
 
     with st.form("add_player_form", clear_on_submit=True):
         name = st.text_input("선수 이름", placeholder="예: 긴꼬리딱새")
-        score = st.selectbox("점수 (1~7)", options=list(range(1, 8)), index=3)
+        score = st.number_input("점수 (음수 가능)", value=0, step=1)
         submitted = st.form_submit_button("추가")
 
         if submitted:
@@ -116,14 +145,13 @@ with left:
             if not name:
                 st.warning("이름을 입력해 주세요.")
             else:
-                # 중복 이름 막기(원하면 제거 가능)
                 if any(p["name"] == name for p in st.session_state.players):
                     st.warning("이미 등록된 이름입니다.")
                 else:
                     pid = st.session_state.next_id
                     st.session_state.next_id += 1
                     st.session_state.players.append({"id": pid, "name": name, "score": int(score)})
-                    st.success(f"추가됨: {name} ({score})")
+                    st.success(f"추가됨: {name} ({int(score)})")
 
     st.divider()
     st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
@@ -138,26 +166,21 @@ with left:
         with btn1:
             if st.button("전체 선택"):
                 for p in st.session_state.players:
-                    key = f"chk_{p['id']}"
-                    st.session_state[key] = True
+                    st.session_state[f"chk_{p['id']}"] = True
                 st.rerun()
 
         with btn2:
             if st.button("전체 해제"):
                 for p in st.session_state.players:
-                    key = f"chk_{p['id']}"
-                    st.session_state[key] = False
+                    st.session_state[f"chk_{p['id']}"] = False
                 st.rerun()
 
         st.write("")
 
-        # 체크박스 상태로 selected_ids 재구성
         selected_ids = set()
 
         for idx, p in enumerate(st.session_state.players):
             key = f"chk_{p['id']}"
-
-            # 최초 렌더링 시에만 기본값을 세션에 넣어둠
             if key not in st.session_state:
                 st.session_state[key] = False
 
@@ -219,18 +242,19 @@ if not teams:
 else:
     sums = [t["sum"] for t in teams]
     gap = max(sums) - min(sums)
-    st.info(f"팀 합계 최대-최소 차이(gap): **{gap:.2f}**")
+
+    total = sum(sums)
+    target = total / len(sums)
+
+    st.info(
+        f"팀 합계 최대-최소 차이(gap): **{gap:.2f}**  |  "
+        f"목표 평균(target): **{target:.2f}**"
+    )
 
     cols = st.columns(min(len(teams), 4))
     for i, t in enumerate(teams):
         with cols[i % len(cols)]:
             st.markdown(f"### 팀 {i + 1}")
-            st.write(f"합계: **{t['sum']:.2f}**")
+            st.write(f"합계: **{t['sum']:.2f}** (target 대비: {t['sum'] - target:+.2f})")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
-
-
-
-
-
-
