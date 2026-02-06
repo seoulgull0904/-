@@ -81,10 +81,11 @@ if "teams_result" not in st.session_state:
 # ----------------------------
 def greedy_assign(players, team_count, team_size, seed=42):
     """
-    방법 A:
-    - 목표합 target = 전체합 / 팀수
-    - 각 플레이어를 배치할 때, 그 팀에 넣었을 때 target에 가장 가까워지는 팀을 선택
-    - |score| 큰 순으로 처리(영향 큰 값 먼저 분산)
+    음수 허용용 그리디 (부호 분리 + target 근접)
+    - target = 전체합 / 팀수
+    - |score| 큰 순으로 먼저 배치(영향 큰 값 분산)
+    - score >= 0: '낮은 팀' 쪽을 우선으로 target 근접
+    - score <  0: '높은 팀' 쪽을 우선으로 target 근접
     """
     rng = random.Random(seed)
 
@@ -92,7 +93,6 @@ def greedy_assign(players, team_count, team_size, seed=42):
     target = total / float(team_count)
 
     ordered = sorted(players, key=lambda p: abs(float(p["score"])), reverse=True)
-
     teams = [{"members": [], "sum": 0.0} for _ in range(team_count)]
 
     for p in ordered:
@@ -102,10 +102,21 @@ def greedy_assign(players, team_count, team_size, seed=42):
         if not candidates:
             break
 
+        # 부호에 따른 "우선 후보군" 만들기
+        if s >= 0:
+            # 양수/0은 낮은 팀(합이 작은 쪽)에게 가야 평균화에 유리
+            min_sum = min(teams[i]["sum"] for i in candidates)
+            priority = [i for i in candidates if teams[i]["sum"] == min_sum]
+        else:
+            # 음수는 높은 팀(합이 큰 쪽)에게 가야 약팀 붕괴를 막음
+            max_sum = max(teams[i]["sum"] for i in candidates)
+            priority = [i for i in candidates if teams[i]["sum"] == max_sum]
+
+        # 우선 후보군 안에서 target에 가장 가까워지는 팀을 선택
         best_idxs = []
         best_dist = None
 
-        for i in candidates:
+        for i in priority:
             new_sum = teams[i]["sum"] + s
             dist = abs(new_sum - target)
 
@@ -114,6 +125,10 @@ def greedy_assign(players, team_count, team_size, seed=42):
                 best_idxs = [i]
             elif abs(dist - best_dist) <= 1e-12:
                 best_idxs.append(i)
+
+        # (안전장치) priority가 비어있을 수는 없지만, 혹시 모를 경우 candidates로 폴백
+        if not best_idxs:
+            best_idxs = candidates
 
         # 동률이면 인원 적은 팀 우선 -> 그래도 동률이면 랜덤
         if len(best_idxs) > 1:
@@ -125,6 +140,7 @@ def greedy_assign(players, team_count, team_size, seed=42):
         teams[chosen]["sum"] += s
 
     return teams
+
 
 
 # ----------------------------
@@ -258,3 +274,4 @@ else:
             st.write(f"합계: **{t['sum']:.2f}** (target 대비: {t['sum'] - target:+.2f})")
             for m in t["members"]:
                 st.write(f"- {m['name']} (**{m['score']}**)")
+
