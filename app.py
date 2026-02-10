@@ -75,9 +75,13 @@ if "selected_ids" not in st.session_state:
 if "teams_result" not in st.session_state:
     st.session_state.teams_result = None
 
+# ✅ 스왑 클릭 상태(옵션 2용)
+if "swap_pick" not in st.session_state:
+    st.session_state.swap_pick = None  # (team_idx, member_id)
+
 
 # ----------------------------
-# Team assignment (Method A: target-based)
+# Team assignment (부호 분리 + target 근접)
 # ----------------------------
 def greedy_assign(players, team_count, team_size, seed=42):
     """
@@ -102,17 +106,13 @@ def greedy_assign(players, team_count, team_size, seed=42):
         if not candidates:
             break
 
-        # 부호에 따른 "우선 후보군" 만들기
         if s >= 0:
-            # 양수/0은 낮은 팀(합이 작은 쪽)에게 가야 평균화에 유리
             min_sum = min(teams[i]["sum"] for i in candidates)
             priority = [i for i in candidates if teams[i]["sum"] == min_sum]
         else:
-            # 음수는 높은 팀(합이 큰 쪽)에게 가야 약팀 붕괴를 막음
             max_sum = max(teams[i]["sum"] for i in candidates)
             priority = [i for i in candidates if teams[i]["sum"] == max_sum]
 
-        # 우선 후보군 안에서 target에 가장 가까워지는 팀을 선택
         best_idxs = []
         best_dist = None
 
@@ -126,11 +126,9 @@ def greedy_assign(players, team_count, team_size, seed=42):
             elif abs(dist - best_dist) <= 1e-12:
                 best_idxs.append(i)
 
-        # (안전장치) priority가 비어있을 수는 없지만, 혹시 모를 경우 candidates로 폴백
         if not best_idxs:
             best_idxs = candidates
 
-        # 동률이면 인원 적은 팀 우선 -> 그래도 동률이면 랜덤
         if len(best_idxs) > 1:
             min_size = min(len(teams[i]["members"]) for i in best_idxs)
             best_idxs = [i for i in best_idxs if len(teams[i]["members"]) == min_size]
@@ -141,6 +139,45 @@ def greedy_assign(players, team_count, team_size, seed=42):
 
     return teams
 
+
+# ----------------------------
+# Swap helpers (옵션 2용)
+# ----------------------------
+def recompute_team_sum(team: dict) -> None:
+    team["sum"] = sum(float(m["score"]) for m in team["members"])
+
+
+def swap_members(teams: list, a: tuple[int, int], b: tuple[int, int]) -> None:
+    """
+    a = (team_idx, member_id), b = (team_idx, member_id)
+    두 멤버의 위치를 서로 교환하고 각 팀 sum을 재계산
+    """
+    ta, ida = a
+    tb, idb = b
+
+    if ta == tb and ida == idb:
+        return
+
+    pa = None
+    pb = None
+
+    for i, m in enumerate(teams[ta]["members"]):
+        if m["id"] == ida:
+            pa = i
+            break
+
+    for i, m in enumerate(teams[tb]["members"]):
+        if m["id"] == idb:
+            pb = i
+            break
+
+    if pa is None or pb is None:
+        return
+
+    teams[ta]["members"][pa], teams[tb]["members"][pb] = teams[tb]["members"][pb], teams[ta]["members"][pa]
+
+    recompute_team_sum(teams[ta])
+    recompute_team_sum(teams[tb])
 
 
 # ----------------------------
@@ -176,7 +213,6 @@ with left:
     if not st.session_state.players:
         st.caption("아직 등록된 선수가 없습니다.")
     else:
-        # 전체 선택/해제
         btn1, btn2 = st.columns(2)
 
         with btn1:
@@ -237,17 +273,20 @@ with right:
         if selected_count < required:
             st.error(f"선택된 선수가 부족합니다. {selected_count}명 / 필요 {required}명")
             st.session_state.teams_result = None
+            st.session_state.swap_pick = None
         elif selected_count > required:
             st.error(f"선택된 선수가 초과입니다. {selected_count}명 / 필요 {required}명 (체크를 줄여주세요)")
             st.session_state.teams_result = None
+            st.session_state.swap_pick = None
         else:
             st.session_state.teams_result = greedy_assign(
                 selected_players, int(team_count), TEAM_SIZE, seed=int(seed)
             )
+            st.session_state.swap_pick = None  # 새로 팀 만들면 스왑 선택 초기화
 
 
 # ----------------------------
-# Results
+# Results (옵션 2: 두 번 클릭하면 자동 스왑)
 # ----------------------------
 st.divider()
 st.subheader("팀 배정 결과")
@@ -267,10 +306,36 @@ else:
         f"목표 평균(target): **{target:.2f}**"
     )
 
+    st.caption("스왑: 사람 1명 클릭 → 다른 사람 1명 클릭하면 즉시 서로 교환됩니다. (같은 사람 다시 클릭하면 선택 해제)")
+
     cols = st.columns(min(len(teams), 4))
-    for i, t in enumerate(teams):
-        with cols[i % len(cols)]:
-            st.markdown(f"### 팀 {i + 1}")
+    for team_idx, t in enumerate(teams):
+        with cols[team_idx % len(cols)]:
+            st.markdown(f"### 팀 {team_idx + 1}")
             st.write(f"합계: **{t['sum']:.2f}** (target 대비: {t['sum'] - target:+.2f})")
+
             for m in t["members"]:
-                st.write(f"- {m['name']} (**{m['score']}**)")
+                picked = st.session_state.swap_pick
+                is_picked = (picked == (team_idx, m["id"]))
+
+                label = f"{'✅ ' if is_picked else ''}{m['name']} ({m['score']})"
+
+                if st.button(label, key=f"pick_{team_idx}_{m['id']}", use_container_width=True):
+                    # 1) 첫 선택 저장
+                    if st.session_state.swap_pick is None:
+                        st.session_state.swap_pick = (team_idx, m["id"])
+                        st.rerun()
+
+                    # 2) 같은 사람 다시 클릭 => 선택 해제
+                    elif st.session_state.swap_pick == (team_idx, m["id"]):
+                        st.session_state.swap_pick = None
+                        st.rerun()
+
+                    # 3) 두 번째 선택 => 스왑 실행
+                    else:
+                        a = st.session_state.swap_pick
+                        b = (team_idx, m["id"])
+                        swap_members(teams, a, b)
+                        st.session_state.teams_result = teams
+                        st.session_state.swap_pick = None
+                        st.rerun()
