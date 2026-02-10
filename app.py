@@ -231,7 +231,7 @@ with left:
 
         selected_ids = set()
 
-        for idx, p in enumerate(st.session_state.players):
+        for idx, p in enumerate(visible_players):
             key = f"chk_{p['id']}"
             if key not in st.session_state:
                 st.session_state[key] = False
@@ -250,6 +250,17 @@ with left:
                 st.write(f"점수: **{p['score']}**")
 
         st.session_state.selected_ids = selected_ids
+# 🔎 검색 입력 (이름 부분 검색)
+query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
+
+q = query.strip().lower()
+
+if q:
+    visible_players = [p for p in st.session_state.players if q in p["name"].lower()]
+else:
+    visible_players = st.session_state.players
+
+st.caption(f"표시 중: {len(visible_players)}명 / 전체: {len(st.session_state.players)}명")
 
 with right:
     st.subheader("팀 설정")
@@ -339,3 +350,4 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
