@@ -141,6 +141,32 @@ def greedy_assign(players, team_count, team_size, seed=42):
 
     return teams
 
+def recompute_team_sum(team: dict) -> None:
+    team["sum"] = sum(float(m["score"]) for m in team["members"])
+
+def move_member(teams: list, src_idx: int, member_id: int, dst_idx: int) -> None:
+    """teams_result에서 src 팀의 member_id를 dst 팀으로 이동"""
+    if src_idx == dst_idx:
+        return
+
+    src = teams[src_idx]
+    dst = teams[dst_idx]
+
+    # 찾기
+    pos = None
+    for i, m in enumerate(src["members"]):
+        if m["id"] == member_id:
+            pos = i
+            break
+    if pos is None:
+        return
+
+    member = src["members"].pop(pos)
+    dst["members"].append(member)
+
+    # 합계 재계산
+    recompute_team_sum(src)
+    recompute_team_sum(dst)
 
 
 # ----------------------------
@@ -273,5 +299,45 @@ else:
             st.markdown(f"### 팀 {i + 1}")
             st.write(f"합계: **{t['sum']:.2f}** (target 대비: {t['sum'] - target:+.2f})")
             for m in t["members"]:
-                st.write(f"- {m['name']} (**{m['score']}**)")
+               teams = st.session_state.teams_result
+if teams:
+    cols = st.columns(min(len(teams), 4))
+
+    for team_idx, t in enumerate(teams):
+        with cols[team_idx % len(cols)]:
+            st.markdown(f"### 팀 {team_idx + 1}")
+            st.write(f"합계: **{t['sum']:.2f}**")
+
+            # 멤버 표시 + 이동 UI
+            for m in t["members"]:
+                row1, row2 = st.columns([5, 3])
+
+                with row1:
+                    st.write(f"- {m['name']} (**{m['score']}**)")
+
+                with row2:
+                    # 목적지 팀 선택(자기 팀 제외)
+                    options = [i for i in range(len(teams)) if i != team_idx]
+                    label_map = {i: f"팀 {i+1}" for i in options}
+
+                    dst = st.selectbox(
+                        "이동 대상",
+                        options=options,
+                        format_func=lambda i: label_map[i],
+                        key=f"mv_dst_{team_idx}_{m['id']}",
+                        label_visibility="collapsed",
+                    )
+
+                    # 팀당 인원 5명 제한을 유지하고 싶으면 아래 체크 유지
+                    disabled = (len(teams[dst]["members"]) >= TEAM_SIZE)
+
+                    if st.button(
+                        "이동",
+                        key=f"mv_btn_{team_idx}_{m['id']}",
+                        disabled=disabled,
+                        use_container_width=True,
+                    ):
+                        move_member(teams, team_idx, m["id"], dst)
+                        st.session_state.teams_result = teams
+                        st.rerun()
 
