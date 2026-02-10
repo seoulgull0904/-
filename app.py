@@ -206,14 +206,14 @@ with left:
                     st.session_state.players.append({"id": pid, "name": name, "score": int(score)})
                     st.success(f"추가됨: {name} ({int(score)})")
 
-    st.divider()
-    st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
-    st.caption("팀에 넣고 싶은 선수만 체크하세요.")
+   st.divider()
+st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
+st.caption("팀에 넣고 싶은 선수만 체크하세요.")
 
-    if not st.session_state.players:
-        st.caption("아직 등록된 선수가 없습니다.")
-    else:
-    # 🔎 선수 검색 (여기 추가!)
+if not st.session_state.players:
+    st.caption("아직 등록된 선수가 없습니다.")
+else:
+    # 🔎 선수 검색
     query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
     q = query.strip().lower()
 
@@ -224,18 +224,18 @@ with left:
 
     st.caption(f"표시 중: {len(visible_players)}명 / 전체: {len(st.session_state.players)}명")
 
-    # 전체 선택/해제
+    # 전체 선택/해제 (검색 결과에만 적용)
     btn1, btn2 = st.columns(2)
 
     with btn1:
         if st.button("전체 선택"):
-            for p in visible_players:  # ✅ 검색 결과에만 적용(원하면 st.session_state.players로 바꿔도 됨)
+            for p in visible_players:
                 st.session_state[f"chk_{p['id']}"] = True
             st.rerun()
 
     with btn2:
         if st.button("전체 해제"):
-            for p in visible_players:  # ✅ 검색 결과에만 적용
+            for p in visible_players:
                 st.session_state[f"chk_{p['id']}"] = False
             st.rerun()
 
@@ -244,7 +244,7 @@ with left:
     # 체크박스 상태로 selected_ids 재구성
     selected_ids = set()
 
-    for idx, p in enumerate(visible_players):  # ✅ 여기!
+    for idx, p in enumerate(visible_players):
         key = f"chk_{p['id']}"
         if key not in st.session_state:
             st.session_state[key] = False
@@ -264,43 +264,6 @@ with left:
 
     st.session_state.selected_ids = selected_ids
 
-        btn1, btn2 = st.columns(2)
-
-        with btn1:
-            if st.button("전체 선택"):
-                for p in st.session_state.players:
-                    st.session_state[f"chk_{p['id']}"] = True
-                st.rerun()
-
-        with btn2:
-            if st.button("전체 해제"):
-                for p in st.session_state.players:
-                    st.session_state[f"chk_{p['id']}"] = False
-                st.rerun()
-
-        st.write("")
-
-        selected_ids = set()
-
-        for idx, p in enumerate(visible_players):
-            key = f"chk_{p['id']}"
-            if key not in st.session_state:
-                st.session_state[key] = False
-
-            c0, c1, c2 = st.columns([1.2, 6, 2])
-
-            with c0:
-                checked = st.checkbox("선택", key=key, label_visibility="collapsed")
-                if checked:
-                    selected_ids.add(p["id"])
-
-            with c1:
-                st.write(f"{idx + 1}. {p['name']}")
-
-            with c2:
-                st.write(f"점수: **{p['score']}**")
-
-        st.session_state.selected_ids = selected_ids
 
 with right:
     st.subheader("팀 설정")
@@ -390,6 +353,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
