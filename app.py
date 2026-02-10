@@ -205,8 +205,8 @@ with left:
                     st.session_state.next_id += 1
                     st.session_state.players.append({"id": pid, "name": name, "score": int(score)})
                     st.success(f"추가됨: {name} ({int(score)})")
+    st.divider()
 
-   st.divider()
 st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
 st.caption("팀에 넣고 싶은 선수만 체크하세요.")
 
@@ -353,6 +353,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
