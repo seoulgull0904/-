@@ -142,6 +142,13 @@ def greedy_assign(players, team_count, team_size, seed=42):
 
 # ----------------------------
 # Swap helpers (옵션 2용)
+
+def on_toggle_player(pid: int, cb_key: str):
+    if st.session_state.get(cb_key, False):
+        st.session_state.selected_ids.add(pid)
+    else:
+        st.session_state.selected_ids.discard(pid)
+
 # ----------------------------
 def recompute_team_sum(team: dict) -> None:
     team["sum"] = sum(float(m["score"]) for m in team["members"])
@@ -186,19 +193,13 @@ def swap_members(teams: list, a: tuple[int, int], b: tuple[int, int]) -> None:
 left, right = st.columns([1.35, 1])
 
 with left:
-    st.divider()
+       st.divider()
     st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
     st.caption("팀에 넣고 싶은 선수만 체크하세요.")
 
     if not st.session_state.players:
         st.caption("아직 등록된 선수가 없습니다.")
     else:
-        # ✅ (핵심) 검색과 무관하게, 전체 선수의 체크박스 키를 먼저 전부 보장
-        for p in st.session_state.players:
-            k = f"chk_{p['id']}"
-            if k not in st.session_state:
-                st.session_state[k] = False
-
         # 🔎 검색
         query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
         q = query.strip().lower()
@@ -210,22 +211,55 @@ with left:
 
         st.caption(f"표시 중: {len(visible_players)}명 / 전체: {len(st.session_state.players)}명")
 
-        # 전체 선택/해제 (검색 결과에만 적용)
+    # 전체 선택/해제 (검색 결과에만 적용)
         btn1, btn2 = st.columns(2)
+
         with btn1:
             if st.button("전체 선택"):
                 for p in visible_players:
-                    st.session_state[f"chk_{p['id']}"] = True
+                    pid = p["id"]
+                    st.session_state.selected_ids.add(pid)
+                    cb_key = f"cb_{pid}"
+                    if cb_key in st.session_state:
+                        st.session_state[cb_key] = True
                 st.rerun()
 
         with btn2:
             if st.button("전체 해제"):
                 for p in visible_players:
-                    st.session_state[f"chk_{p['id']}"] = False
+                    pid = p["id"]
+                    st.session_state.selected_ids.discard(pid)
+                    cb_key = f"cb_{pid}"
+                    if cb_key in st.session_state:
+                        st.session_state[cb_key] = False
                 st.rerun()
 
         st.write("")
 
+        # 체크 UI (선택 상태의 진짜 저장소는 selected_ids)
+        for idx, p in enumerate(visible_players):
+            pid = p["id"]
+            cb_key = f"cb_{pid}"
+    
+            c0, c1, c2 = st.columns([1.2, 6, 2])
+
+            with c0:
+                st.checkbox(
+                    "선택",
+                    value=(pid in st.session_state.selected_ids),
+                    key=cb_key,
+                    label_visibility="collapsed",
+                    on_change=on_toggle_player,
+                    args=(pid, cb_key),
+                )
+
+            with c1:
+                st.write(f"{idx + 1}. {p['name']}")
+
+            with c2:
+                st.write(f"점수: **{p['score']}**")
+
+    
         # 화면에는 필터된 선수만 표시
         for idx, p in enumerate(visible_players):
             key = f"chk_{p['id']}"
@@ -254,7 +288,8 @@ with right:
     st.write(f"팀당 인원수: **{TEAM_SIZE}명**")
 
     required = team_count * TEAM_SIZE
-    selected_count = len(st.session_state.selected_ids)
+    selected_players = [p for p in st.session_state.players if p["id"] in st.session_state.selected_ids]
+
 
     st.write(f"필요 인원: **{required}명**")
     st.write(f"선택된 인원: **{selected_count}명**")
@@ -335,6 +370,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
