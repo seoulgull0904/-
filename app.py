@@ -17,9 +17,8 @@ NAMES_URL  = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out
 SCORES_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={GID}&range=N7:N"
 
 
-@st.cache_data(ttl=60)  # 60초마다 새로 가져오기
+@st.cache_data(ttl=60)
 def fetch_players_from_sheet(default_score: int = 0) -> list[dict]:
-    # 이름
     df_names = pd.read_csv(NAMES_URL, header=None)
     names = (
         df_names.iloc[:, 0]
@@ -29,7 +28,6 @@ def fetch_players_from_sheet(default_score: int = 0) -> list[dict]:
         .tolist()
     )
 
-    # 점수(음수 포함 허용)
     df_scores = pd.read_csv(SCORES_URL, header=None)
     scores_raw = df_scores.iloc[:, 0].tolist()
 
@@ -41,13 +39,11 @@ def fetch_players_from_sheet(default_score: int = 0) -> list[dict]:
             s = default_score
         scores.append(s)
 
-    # 길이 맞추기(이름 기준)
     if len(scores) < len(names):
         scores += [default_score] * (len(names) - len(scores))
     else:
         scores = scores[:len(names)]
 
-    # (이름, 점수) 묶기 — 빈 이름 제거
     players = []
     for i, name in enumerate(names):
         if name:
@@ -75,7 +71,6 @@ if "selected_ids" not in st.session_state:
 if "teams_result" not in st.session_state:
     st.session_state.teams_result = None
 
-# ✅ 스왑 클릭 상태(옵션 2용)
 if "swap_pick" not in st.session_state:
     st.session_state.swap_pick = None  # (team_idx, member_id)
 
@@ -84,13 +79,6 @@ if "swap_pick" not in st.session_state:
 # Team assignment (부호 분리 + target 근접)
 # ----------------------------
 def greedy_assign(players, team_count, team_size, seed=42):
-    """
-    음수 허용용 그리디 (부호 분리 + target 근접)
-    - target = 전체합 / 팀수
-    - |score| 큰 순으로 먼저 배치(영향 큰 값 분산)
-    - score >= 0: '낮은 팀' 쪽을 우선으로 target 근접
-    - score <  0: '높은 팀' 쪽을 우선으로 target 근접
-    """
     rng = random.Random(seed)
 
     total = sum(float(p["score"]) for p in players)
@@ -141,24 +129,23 @@ def greedy_assign(players, team_count, team_size, seed=42):
 
 
 # ----------------------------
-# Swap helpers (옵션 2용)
-
+# Selection handling (검색해도 선택 안 풀리게)
+# ----------------------------
 def on_toggle_player(pid: int, cb_key: str):
     if st.session_state.get(cb_key, False):
         st.session_state.selected_ids.add(pid)
     else:
         st.session_state.selected_ids.discard(pid)
 
+
+# ----------------------------
+# Swap helpers
 # ----------------------------
 def recompute_team_sum(team: dict) -> None:
     team["sum"] = sum(float(m["score"]) for m in team["members"])
 
 
 def swap_members(teams: list, a: tuple[int, int], b: tuple[int, int]) -> None:
-    """
-    a = (team_idx, member_id), b = (team_idx, member_id)
-    두 멤버의 위치를 서로 교환하고 각 팀 sum을 재계산
-    """
     ta, ida = a
     tb, idb = b
 
@@ -181,29 +168,53 @@ def swap_members(teams: list, a: tuple[int, int], b: tuple[int, int]) -> None:
     if pa is None or pb is None:
         return
 
-    teams[ta]["members"][pa], teams[tb]["members"][pb] = teams[tb]["members"][pb], teams[ta]["members"][pa]
+    teams[ta]["members"][pa], teams[tb]["members"][pb] = (
+        teams[tb]["members"][pb],
+        teams[ta]["members"][pa],
+    )
 
     recompute_team_sum(teams[ta])
     recompute_team_sum(teams[tb])
 
 
 # ----------------------------
-# UI
+# UI layout
 # ----------------------------
 left, right = st.columns([1.35, 1])
 
 with left:
-       st.divider()
-       st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
-       st.caption("팀에 넣고 싶은 선수만 체크하세요.")
+    st.subheader("선수 등록")
 
-if not st.session_state.players:
-       st.caption("아직 등록된 선수가 없습니다.")
-else:
+    # 추가 폼
+    with st.form("add_player_form", clear_on_submit=True):
+        name = st.text_input("선수 이름", placeholder="예: 긴꼬리딱새")
+        score = st.number_input("점수 (음수 가능)", value=0, step=1)
+        submitted = st.form_submit_button("추가")
+
+        if submitted:
+            name = name.strip()
+            if not name:
+                st.warning("이름을 입력해 주세요.")
+            else:
+                if any(p["name"] == name for p in st.session_state.players):
+                    st.warning("이미 등록된 이름입니다.")
+                else:
+                    pid = st.session_state.next_id
+                    st.session_state.next_id += 1
+                    st.session_state.players.append({"id": pid, "name": name, "score": int(score)})
+                    st.success(f"추가됨: {name} ({int(score)})")
+                    st.rerun()
+
+    st.divider()
+    st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
+    st.caption("팀에 넣고 싶은 선수만 체크하세요.")
+
+    if not st.session_state.players:
+        st.caption("아직 등록된 선수가 없습니다.")
+    else:
         # 🔎 검색
         query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
         q = query.strip().lower()
-
         if q:
             visible_players = [p for p in st.session_state.players if q in p["name"].lower()]
         else:
@@ -211,17 +222,15 @@ else:
 
         st.caption(f"표시 중: {len(visible_players)}명 / 전체: {len(st.session_state.players)}명")
 
-    # 전체 선택/해제 (검색 결과에만 적용)
+        # 전체 선택/해제 (검색 결과에만 적용)
         btn1, btn2 = st.columns(2)
-
         with btn1:
             if st.button("전체 선택"):
                 for p in visible_players:
                     pid = p["id"]
                     st.session_state.selected_ids.add(pid)
                     cb_key = f"cb_{pid}"
-                    if cb_key in st.session_state:
-                        st.session_state[cb_key] = True
+                    st.session_state[cb_key] = True
                 st.rerun()
 
         with btn2:
@@ -230,19 +239,17 @@ else:
                     pid = p["id"]
                     st.session_state.selected_ids.discard(pid)
                     cb_key = f"cb_{pid}"
-                    if cb_key in st.session_state:
-                        st.session_state[cb_key] = False
+                    st.session_state[cb_key] = False
                 st.rerun()
 
         st.write("")
 
-        # 체크 UI (선택 상태의 진짜 저장소는 selected_ids)
+        # 체크 UI (선택의 진짜 저장소 = selected_ids)
         for idx, p in enumerate(visible_players):
             pid = p["id"]
             cb_key = f"cb_{pid}"
-    
-            c0, c1, c2 = st.columns([1.2, 6, 2])
 
+            c0, c1, c2 = st.columns([1.2, 6, 2])
             with c0:
                 st.checkbox(
                     "선택",
@@ -252,33 +259,10 @@ else:
                     on_change=on_toggle_player,
                     args=(pid, cb_key),
                 )
-
-            with c1:
-                st.write(f"{idx + 1}. {p['name']}")
-
-            with c2:
-                st.write(f"점수: **{p['score']}**")
-
-    
-        # 화면에는 필터된 선수만 표시
-        for idx, p in enumerate(visible_players):
-            key = f"chk_{p['id']}"
-
-            c0, c1, c2 = st.columns([1.2, 6, 2])
-            with c0:
-                st.checkbox("선택", key=key, label_visibility="collapsed")
             with c1:
                 st.write(f"{idx + 1}. {p['name']}")
             with c2:
                 st.write(f"점수: **{p['score']}**")
-
-    # ✅ (핵심) 선택된 id는 '전체 선수' 기준으로 재계산 → 검색해도 절대 안 사라짐
-        st.session_state.selected_ids = {
-            p["id"] for p in st.session_state.players
-            if st.session_state.get(f"chk_{p['id']}", False)
-        }
-
-
 
 
 with right:
@@ -288,8 +272,7 @@ with right:
     st.write(f"팀당 인원수: **{TEAM_SIZE}명**")
 
     required = team_count * TEAM_SIZE
-    selected_players = [p for p in st.session_state.players if p["id"] in st.session_state.selected_ids]
-
+    selected_count = len(st.session_state.selected_ids)
 
     st.write(f"필요 인원: **{required}명**")
     st.write(f"선택된 인원: **{selected_count}명**")
@@ -313,11 +296,12 @@ with right:
             st.session_state.teams_result = greedy_assign(
                 selected_players, int(team_count), TEAM_SIZE, seed=int(seed)
             )
-            st.session_state.swap_pick = None  # 새로 팀 만들면 스왑 선택 초기화
+            st.session_state.swap_pick = None
+            st.rerun()
 
 
 # ----------------------------
-# Results (옵션 2: 두 번 클릭하면 자동 스왑)
+# Results (두 번 클릭하면 자동 스왑)
 # ----------------------------
 st.divider()
 st.subheader("팀 배정 결과")
@@ -348,21 +332,15 @@ else:
             for m in t["members"]:
                 picked = st.session_state.swap_pick
                 is_picked = (picked == (team_idx, m["id"]))
-
                 label = f"{'✅ ' if is_picked else ''}{m['name']} ({m['score']})"
 
                 if st.button(label, key=f"pick_{team_idx}_{m['id']}", use_container_width=True):
-                    # 1) 첫 선택 저장
                     if st.session_state.swap_pick is None:
                         st.session_state.swap_pick = (team_idx, m["id"])
                         st.rerun()
-
-                    # 2) 같은 사람 다시 클릭 => 선택 해제
                     elif st.session_state.swap_pick == (team_idx, m["id"]):
                         st.session_state.swap_pick = None
                         st.rerun()
-
-                    # 3) 두 번째 선택 => 스왑 실행
                     else:
                         a = st.session_state.swap_pick
                         b = (team_idx, m["id"])
@@ -370,16 +348,3 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
-
-
-
-
-
-
-
-
-
-
-
-
-
