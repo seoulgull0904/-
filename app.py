@@ -187,62 +187,62 @@ left, right = st.columns([1.35, 1])
 
 with left:
     st.divider()
-st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
-st.caption("팀에 넣고 싶은 선수만 체크하세요.")
+    st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
+    st.caption("팀에 넣고 싶은 선수만 체크하세요.")
 
-if not st.session_state.players:
-    st.caption("아직 등록된 선수가 없습니다.")
-else:
-    # ✅ (핵심) 검색과 무관하게, 전체 선수의 체크박스 키를 먼저 전부 보장
-    for p in st.session_state.players:
-        k = f"chk_{p['id']}"
-        if k not in st.session_state:
-            st.session_state[k] = False
-
-    # 🔎 검색
-    query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
-    q = query.strip().lower()
-
-    if q:
-        visible_players = [p for p in st.session_state.players if q in p["name"].lower()]
+    if not st.session_state.players:
+        st.caption("아직 등록된 선수가 없습니다.")
     else:
-        visible_players = st.session_state.players
+        # ✅ (핵심) 검색과 무관하게, 전체 선수의 체크박스 키를 먼저 전부 보장
+        for p in st.session_state.players:
+            k = f"chk_{p['id']}"
+            if k not in st.session_state:
+                st.session_state[k] = False
 
-    st.caption(f"표시 중: {len(visible_players)}명 / 전체: {len(st.session_state.players)}명")
+        # 🔎 검색
+        query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
+        q = query.strip().lower()
 
-    # 전체 선택/해제 (검색 결과에만 적용)
-    btn1, btn2 = st.columns(2)
-    with btn1:
-        if st.button("전체 선택"):
-            for p in visible_players:
-                st.session_state[f"chk_{p['id']}"] = True
-            st.rerun()
+        if q:
+            visible_players = [p for p in st.session_state.players if q in p["name"].lower()]
+        else:
+            visible_players = st.session_state.players
 
-    with btn2:
-        if st.button("전체 해제"):
-            for p in visible_players:
-                st.session_state[f"chk_{p['id']}"] = False
-            st.rerun()
+        st.caption(f"표시 중: {len(visible_players)}명 / 전체: {len(st.session_state.players)}명")
 
-    st.write("")
+        # 전체 선택/해제 (검색 결과에만 적용)
+        btn1, btn2 = st.columns(2)
+        with btn1:
+            if st.button("전체 선택"):
+                for p in visible_players:
+                    st.session_state[f"chk_{p['id']}"] = True
+                st.rerun()
 
-    # 화면에는 필터된 선수만 표시
-    for idx, p in enumerate(visible_players):
-        key = f"chk_{p['id']}"
+        with btn2:
+            if st.button("전체 해제"):
+                for p in visible_players:
+                    st.session_state[f"chk_{p['id']}"] = False
+                st.rerun()
 
-        c0, c1, c2 = st.columns([1.2, 6, 2])
-        with c0:
-            st.checkbox("선택", key=key, label_visibility="collapsed")
-        with c1:
-            st.write(f"{idx + 1}. {p['name']}")
-        with c2:
-            st.write(f"점수: **{p['score']}**")
+        st.write("")
+
+        # 화면에는 필터된 선수만 표시
+        for idx, p in enumerate(visible_players):
+            key = f"chk_{p['id']}"
+
+            c0, c1, c2 = st.columns([1.2, 6, 2])
+            with c0:
+                st.checkbox("선택", key=key, label_visibility="collapsed")
+            with c1:
+                st.write(f"{idx + 1}. {p['name']}")
+            with c2:
+                st.write(f"점수: **{p['score']}**")
 
     # ✅ (핵심) 선택된 id는 '전체 선수' 기준으로 재계산 → 검색해도 절대 안 사라짐
-    st.session_state.selected_ids = {
-        p["id"] for p in st.session_state.players
-        if st.session_state.get(f"chk_{p['id']}", False)
-    }
+        st.session_state.selected_ids = {
+            p["id"] for p in st.session_state.players
+            if st.session_state.get(f"chk_{p['id']}", False)
+        }
 
 
 
@@ -335,6 +335,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
