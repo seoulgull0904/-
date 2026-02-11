@@ -244,25 +244,27 @@ else:
     # 체크박스 상태로 selected_ids 재구성
     selected_ids = set()
 
-    for idx, p in enumerate(visible_players):
-        key = f"chk_{p['id']}"
-        if key not in st.session_state:
-            st.session_state[key] = False
+    # (루프는 화면 표시용으로만 쓰고)
+for idx, p in enumerate(visible_players):
+    key = f"chk_{p['id']}"
+    if key not in st.session_state:
+        st.session_state[key] = False
 
-        c0, c1, c2 = st.columns([1.2, 6, 2])
+    c0, c1, c2 = st.columns([1.2, 6, 2])
+    with c0:
+        st.checkbox("선택", key=key, label_visibility="collapsed")
+    with c1:
+        st.write(f"{idx + 1}. {p['name']}")
+    with c2:
+        st.write(f"점수: **{p['score']}**")
 
-        with c0:
-            checked = st.checkbox("선택", key=key, label_visibility="collapsed")
-            if checked:
-                selected_ids.add(p["id"])
+# ✅ selected_ids는 전체 선수 기준으로 재계산 (이게 핵심)
+st.session_state.selected_ids = {
+    p["id"]
+    for p in st.session_state.players
+    if st.session_state.get(f"chk_{p['id']}", False)
+}
 
-        with c1:
-            st.write(f"{idx + 1}. {p['name']}")
-
-        with c2:
-            st.write(f"점수: **{p['score']}**")
-
-    st.session_state.selected_ids = selected_ids
 
 
 with right:
@@ -353,6 +355,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
