@@ -194,8 +194,8 @@ left, right = st.columns([1.35, 1])
 
 with left:
        st.divider()
-    st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
-    st.caption("팀에 넣고 싶은 선수만 체크하세요.")
+       st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
+       st.caption("팀에 넣고 싶은 선수만 체크하세요.")
 
     if not st.session_state.players:
         st.caption("아직 등록된 선수가 없습니다.")
@@ -370,6 +370,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
