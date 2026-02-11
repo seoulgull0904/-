@@ -199,7 +199,7 @@ with left:
 
 if not st.session_state.players:
        st.caption("아직 등록된 선수가 없습니다.")
-    else:
+else:
         # 🔎 검색
         query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
         q = query.strip().lower()
@@ -370,6 +370,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
