@@ -186,35 +186,21 @@ def swap_members(teams: list, a: tuple[int, int], b: tuple[int, int]) -> None:
 left, right = st.columns([1.35, 1])
 
 with left:
-    st.subheader("선수 등록")
-
-    with st.form("add_player_form", clear_on_submit=True):
-        name = st.text_input("선수 이름", placeholder="예: 긴꼬리딱새")
-        score = st.number_input("점수 (음수 가능)", value=0, step=1)
-        submitted = st.form_submit_button("추가")
-
-        if submitted:
-            name = name.strip()
-            if not name:
-                st.warning("이름을 입력해 주세요.")
-            else:
-                if any(p["name"] == name for p in st.session_state.players):
-                    st.warning("이미 등록된 이름입니다.")
-                else:
-                    pid = st.session_state.next_id
-                    st.session_state.next_id += 1
-                    st.session_state.players.append({"id": pid, "name": name, "score": int(score)})
-                    st.success(f"추가됨: {name} ({int(score)})")
     st.divider()
-
 st.subheader(f"등록된 선수 ({len(st.session_state.players)}명)")
 st.caption("팀에 넣고 싶은 선수만 체크하세요.")
 
 if not st.session_state.players:
     st.caption("아직 등록된 선수가 없습니다.")
 else:
-    # 🔎 선수 검색
-    query = st.text_input("선수 검색", value="", placeholder="이름을 입력뒤 enter (예: 딱새)")
+    # ✅ (핵심) 검색과 무관하게, 전체 선수의 체크박스 키를 먼저 전부 보장
+    for p in st.session_state.players:
+        k = f"chk_{p['id']}"
+        if k not in st.session_state:
+            st.session_state[k] = False
+
+    # 🔎 검색
+    query = st.text_input("선수 검색", value="", placeholder="이름을 입력하면 필터링됩니다 (예: 긴꼬리)")
     q = query.strip().lower()
 
     if q:
@@ -226,7 +212,6 @@ else:
 
     # 전체 선택/해제 (검색 결과에만 적용)
     btn1, btn2 = st.columns(2)
-
     with btn1:
         if st.button("전체 선택"):
             for p in visible_players:
@@ -241,29 +226,24 @@ else:
 
     st.write("")
 
-    # 체크박스 상태로 selected_ids 재구성
-    selected_ids = set()
+    # 화면에는 필터된 선수만 표시
+    for idx, p in enumerate(visible_players):
+        key = f"chk_{p['id']}"
 
-    # (루프는 화면 표시용으로만 쓰고)
-for idx, p in enumerate(visible_players):
-    key = f"chk_{p['id']}"
-    if key not in st.session_state:
-        st.session_state[key] = False
+        c0, c1, c2 = st.columns([1.2, 6, 2])
+        with c0:
+            st.checkbox("선택", key=key, label_visibility="collapsed")
+        with c1:
+            st.write(f"{idx + 1}. {p['name']}")
+        with c2:
+            st.write(f"점수: **{p['score']}**")
 
-    c0, c1, c2 = st.columns([1.2, 6, 2])
-    with c0:
-        st.checkbox("선택", key=key, label_visibility="collapsed")
-    with c1:
-        st.write(f"{idx + 1}. {p['name']}")
-    with c2:
-        st.write(f"점수: **{p['score']}**")
+    # ✅ (핵심) 선택된 id는 '전체 선수' 기준으로 재계산 → 검색해도 절대 안 사라짐
+    st.session_state.selected_ids = {
+        p["id"] for p in st.session_state.players
+        if st.session_state.get(f"chk_{p['id']}", False)
+    }
 
-# ✅ selected_ids는 전체 선수 기준으로 재계산 (이게 핵심)
-st.session_state.selected_ids = {
-    p["id"]
-    for p in st.session_state.players
-    if st.session_state.get(f"chk_{p['id']}", False)
-}
 
 
 
@@ -355,6 +335,7 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
 
 
