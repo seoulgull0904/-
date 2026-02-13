@@ -79,13 +79,32 @@ if "swap_pick" not in st.session_state:
 # Team assignment (부호 분리 + target 근접)
 # ----------------------------
 def greedy_assign(players, team_count, team_size, seed=42):
+    """
+    시드에 따라 결과가 눈에 띄게 바뀌는 버전:
+    1) 시드로 입력 순서를 셔플 (같은 점수 그룹/동점 상황을 크게 흔듦)
+    2) 팀 선택 점수(dist)에 아주 작은 노이즈(jitter)를 더해
+       거의 비슷한 후보들 사이에서 랜덤 분기 발생
+    3) 음수/양수 분리 규칙은 유지
+    """
     rng = random.Random(seed)
 
     total = sum(float(p["score"]) for p in players)
     target = total / float(team_count)
 
-    ordered = sorted(players, key=lambda p: abs(float(p["score"])), reverse=True)
+    # ✅ 1) 시드로 먼저 셔플 → 시드 바꾸면 결과가 확 달라짐
+    ordered = players[:]
+    rng.shuffle(ordered)
+
+    # 영향 큰 순으로(절대값 큰 점수 먼저)
+    ordered.sort(key=lambda p: abs(float(p["score"])), reverse=True)
+
     teams = [{"members": [], "sum": 0.0} for _ in range(team_count)]
+
+    # 노이즈 크기(점수 스케일에 맞춰 자동 설정)
+    # 점수들이 작으면 노이즈도 작게, 점수 스케일이 크면 조금 키움
+    abs_scores = [abs(float(p["score"])) for p in players]
+    scale = max(abs_scores) if abs_scores else 1.0
+    jitter = max(1e-6, scale * 0.02)  # 2% 정도 (원하면 0.01~0.05로 조절)
 
     for p in ordered:
         s = float(p["score"])
@@ -94,6 +113,7 @@ def greedy_assign(players, team_count, team_size, seed=42):
         if not candidates:
             break
 
+        # ✅ 음수/양수 분리 우선 후보군
         if s >= 0:
             min_sum = min(teams[i]["sum"] for i in candidates)
             priority = [i for i in candidates if teams[i]["sum"] == min_sum]
@@ -101,22 +121,27 @@ def greedy_assign(players, team_count, team_size, seed=42):
             max_sum = max(teams[i]["sum"] for i in candidates)
             priority = [i for i in candidates if teams[i]["sum"] == max_sum]
 
+        # ✅ 2) target 근접(dist)에 작은 랜덤 노이즈를 섞어서 시드 영향 확대
+        best_val = None
         best_idxs = []
-        best_dist = None
 
         for i in priority:
             new_sum = teams[i]["sum"] + s
             dist = abs(new_sum - target)
 
-            if best_dist is None or dist < best_dist - 1e-12:
-                best_dist = dist
+            # dist가 거의 같을 때만 갈리도록 "아주 작은" 노이즈 추가
+            noisy = dist + rng.uniform(-jitter, jitter)
+
+            if best_val is None or noisy < best_val:
+                best_val = noisy
                 best_idxs = [i]
-            elif abs(dist - best_dist) <= 1e-12:
+            elif abs(noisy - best_val) <= 1e-12:
                 best_idxs.append(i)
 
         if not best_idxs:
-            best_idxs = candidates
+            best_idxs = priority if priority else candidates
 
+        # 동률이면 인원 적은 팀 우선 -> 그래도 동률이면 랜덤
         if len(best_idxs) > 1:
             min_size = min(len(teams[i]["members"]) for i in best_idxs)
             best_idxs = [i for i in best_idxs if len(teams[i]["members"]) == min_size]
@@ -126,6 +151,7 @@ def greedy_assign(players, team_count, team_size, seed=42):
         teams[chosen]["sum"] += s
 
     return teams
+
 
 
 # ----------------------------
@@ -348,4 +374,5 @@ else:
                         st.session_state.teams_result = teams
                         st.session_state.swap_pick = None
                         st.rerun()
+
 
